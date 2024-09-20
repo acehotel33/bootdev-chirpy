@@ -9,11 +9,13 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	var root http.Dir = "."
-	fileServerHandler := http.FileServer(root)
-	mux.Handle("/", fileServerHandler)
+	mux.Handle("/", http.FileServer(http.Dir(".")))
 
-	server := http.Server{
+	mux.Handle("/assets", http.FileServer(http.Dir("./assets")))
+
+	mux.Handle("/healthz")
+
+	server := &http.Server{
 		Addr:    "localhost:8080",
 		Handler: mux,
 	}
