@@ -13,7 +13,12 @@ func main() {
 
 	mux.Handle("/assets", http.FileServer(http.Dir("./assets")))
 
-	mux.Handle("/healthz")
+	func healthzFunc(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}
+	mux.Handle("/healthz", http.HandlerFunc(healthzFunc))
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
