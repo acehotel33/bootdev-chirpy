@@ -10,8 +10,10 @@ type apiConfig struct {
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	cfg.fileserverHits += 1
-	return next
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg.fileserverHits += 1
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (cfg *apiConfig) serverHitsHandler(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +31,9 @@ func healthzFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	apiCfg := apiConfig{}
+	apiCfg := apiConfig{
+		fileserverHits: 0,
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
