@@ -25,6 +25,13 @@ func (cfg *apiConfig) serverHitsHandler(w http.ResponseWriter, r *http.Request) 
 	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits)
 }
 
+func (cfg *apiConfig) resetHitsHandler(w http.ResponseWriter, r *http.Request) {
+	cfg.fileserverHits = 0
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Hits counter reset to %d", cfg.fileserverHits)
+}
+
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -42,6 +49,7 @@ func main() {
 	mux.Handle("/assets", assetsHandler)
 	mux.Handle("/healthz", http.HandlerFunc(healthzFunc))
 	mux.HandleFunc("/metrics", apiCfg.serverHitsHandler)
+	mux.HandleFunc("/reset", apiCfg.resetHitsHandler)
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
