@@ -9,20 +9,21 @@ type apiConfig struct {
 	fileserverHits int
 }
 
+var appHandler http.Handler = http.FileServer(http.Dir("."))
+var assetsHandler http.Handler = http.FileServer(http.Dir("./assets"))
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits += 1
+		cfg.fileserverHits++
+		// fmt.Printf("Hits incremented. Current count: %d\n", cfg.fileserverHits)
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (cfg *apiConfig) serverHitsHandler(w http.ResponseWriter, r *http.Request) {
+	// fmt.Printf("Serving metrics. Current count: %d\n", cfg.fileserverHits)
 	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits)
 }
-
-var appHandler http.Handler = http.StripPrefix("/app", http.FileServer(http.Dir(".")))
-
-var assetsHandler http.Handler = http.FileServer(http.Dir("./assets"))
 
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -36,7 +37,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(appHandler))
+
+	mux.Handle("/app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
 	mux.Handle("/assets", assetsHandler)
 	mux.Handle("/healthz", http.HandlerFunc(healthzFunc))
 	mux.HandleFunc("/metrics", apiCfg.serverHitsHandler)
