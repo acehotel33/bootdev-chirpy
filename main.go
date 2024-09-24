@@ -11,6 +11,7 @@ type apiConfig struct {
 
 var appHandler http.Handler = http.FileServer(http.Dir("."))
 var assetsHandler http.Handler = http.FileServer(http.Dir("./assets"))
+var adminHandler http.Handler = http.FileServer(http.Dir("./admin"))
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -46,10 +47,11 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("/app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
+	mux.Handle("/admin/", http.StripPrefix("/admin", adminHandler))
 	mux.Handle("/assets/", http.StripPrefix("/assets", assetsHandler))
-	mux.HandleFunc("/healthz", healthzFunc)
-	mux.HandleFunc("/metrics", apiCfg.serverHitsHandler)
-	mux.HandleFunc("/reset", apiCfg.resetHitsHandler)
+	mux.HandleFunc("GET /api/healthz", healthzFunc)
+	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
+	mux.HandleFunc("/api/reset", apiCfg.resetHitsHandler)
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
