@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 type apiConfig struct {
 	fileserverHits int
 }
+
+var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
 
 var appHandler http.Handler = http.FileServer(http.Dir("."))
 var assetsHandler http.Handler = http.FileServer(http.Dir("."))
@@ -63,8 +66,21 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 	if chCount > 140 {
 		respondWithError(w, 400, fmt.Sprintf("Chirp is too long (exceeds limit by %d characters)", chCount-140))
 	} else {
-		respondWithJSON(w, 200, map[string]bool{"valid": true})
+		words := strings.Fields(chirp.Body)
+		for i, word := range words {
+			for _, pWord := range ProfaneWords {
+				if strings.ToLower(word) == pWord {
+					words[i] = "****"
+				}
+			}
+		}
+		joinedWords := strings.Join(words, " ")
+
+		if err := respondWithJSON(w, 200, map[string]string{"cleaned_body": joinedWords}); err != nil {
+			respondWithError(w, 500, "Could not clean the chirp")
+		}
 	}
+
 }
 
 func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) error {
