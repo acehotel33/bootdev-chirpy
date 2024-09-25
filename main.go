@@ -66,21 +66,25 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 	if chCount > 140 {
 		respondWithError(w, 400, fmt.Sprintf("Chirp is too long (exceeds limit by %d characters)", chCount-140))
 	} else {
-		words := strings.Fields(chirp.Body)
-		for i, word := range words {
-			for _, pWord := range ProfaneWords {
-				if strings.ToLower(word) == pWord {
-					words[i] = "****"
-				}
-			}
-		}
-		joinedWords := strings.Join(words, " ")
+		cleanWords := profanityReplacer(chirp.Body)
 
-		if err := respondWithJSON(w, 200, map[string]string{"cleaned_body": joinedWords}); err != nil {
+		if err := respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanWords}); err != nil {
 			respondWithError(w, 500, "Could not clean the chirp")
 		}
 	}
 
+}
+
+func profanityReplacer(text string) string {
+	words := strings.Fields(text)
+	for i, word := range words {
+		for _, pWord := range ProfaneWords {
+			if strings.ToLower(word) == pWord {
+				words[i] = "****"
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) error {
