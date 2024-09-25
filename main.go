@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -46,6 +47,44 @@ func healthzFunc(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func validateChirp(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type chirpStruct struct {
+		Body string `json:"body"`
+	}
+
+	chirp := chirpStruct{}
+	if err := json.NewDecoder(r.Body).Decode(&chirp); err != nil {
+		respondWithError(w, 500, "Could not decode request body")
+	}
+
+	chCount := len(chirp.Body)
+	if chCount > 140 {
+		respondWithError(w, 400, fmt.Sprintf("Chirp is too long (exceeds limit by %d characters)", chCount-140))
+	} else {
+		respondWithJSON(w, 200, map[string]bool{"valid": true})
+	}
+}
+
+func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) error {
+	respJSON, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(statusCode)
+	w.Write(respJSON)
+
+	return nil
+}
+
+func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
+	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
+}
+
 func main() {
 	apiCfg := apiConfig{
 		fileserverHits: 0,
@@ -59,6 +98,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
 	mux.Handle("POST /admin/reset", http.HandlerFunc(apiCfg.resetHitsHandler))
+	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirp))
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
