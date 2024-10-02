@@ -16,12 +16,9 @@ var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
 var appHandler http.Handler = http.FileServer(http.Dir("."))
 var assetsHandler http.Handler = http.FileServer(http.Dir("."))
 
-// var adminHandler http.Handler = http.FileServer(http.Dir("./admin"))
-
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits++
-		// fmt.Printf("Hits incremented. Current count: %d\n", cfg.fileserverHits)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -33,7 +30,6 @@ func (cfg *apiConfig) adminHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) serverHitsHandler(w http.ResponseWriter, r *http.Request) {
-	// fmt.Printf("Serving metrics. Current count: %d\n", cfg.fileserverHits)
 	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits)
 }
 
