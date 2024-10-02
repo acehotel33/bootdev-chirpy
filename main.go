@@ -1,14 +1,21 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
+
+	"github.com/acehotel33/bootdev-chirpy/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits int
+	dbQueries      *database.Queries
 }
 
 var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
@@ -102,8 +109,18 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 }
 
 func main() {
+	godotenv.Load()
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		fmt.Printf("Could not initiate db: %s", err)
+	}
+	dbQueries := database.New(db)
+
 	apiCfg := apiConfig{
 		fileserverHits: 0,
+		dbQueries:      dbQueries,
 	}
 
 	mux := http.NewServeMux()
