@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/acehotel33/bootdev-chirpy/internal/database"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -16,6 +18,13 @@ import (
 type apiConfig struct {
 	fileserverHits int
 	dbQueries      *database.Queries
+}
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
 }
 
 var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
@@ -108,10 +117,40 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
 }
 
+func (apiCfg apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type emailStruct struct {
+		Email string `json:"email"`
+	}
+
+	newEmail := emailStruct{}
+	if err := json.NewDecoder(r.Body).Decode(&newEmail); err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not decode request body: %s", err))
+	}
+
+	user, err := apiCfg.dbQueries.CreateUser(r.Context(), newEmail.Email)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not create user: %s", err))
+	}
+
+	User := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	if err := respondWithJSON(w, 200, User); err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
+	}
+
+}
+
 func main() {
 	godotenv.Load()
-
 	dbURL := os.Getenv("DB_URL")
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Printf("Could not initiate db: %s", err)
@@ -132,6 +171,7 @@ func main() {
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
 	mux.Handle("POST /admin/reset", http.HandlerFunc(apiCfg.resetHitsHandler))
 	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirp))
+	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsers))
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
