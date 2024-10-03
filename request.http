@@ -1,0 +1,11 @@
+### Get Request
+GET http://localhost:8080/app
+
+### Post Request
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{
+  "email": "john@example.com"
+}
+
