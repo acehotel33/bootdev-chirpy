@@ -1,11 +1,31 @@
 ### Get Request
 GET http://localhost:8080/app
 
+### Get Request
+GET http://localhost:8080/admin
+
+### Get Request
+GET http://localhost:8080/api/healthz
+
+### Get Request
+GET http://localhost:8080/api/metrics
+
 ### Post Request
 POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "john@example.com"
+  "email": "ilya@example.com"
 }
 
+### Post Request
+POST http://localhost:8080/admin/resetUsers
+
+### Post Request
+POST http://localhost:8080/admin/resetHits
+
+### Post Request
+POST http://localhost:8080/admin/reset
+
+### Post Request
+POST http://localhost:8080/admin

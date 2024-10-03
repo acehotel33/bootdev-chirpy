@@ -18,6 +18,7 @@ import (
 type apiConfig struct {
 	fileserverHits int
 	dbQueries      *database.Queries
+	platform       string
 }
 
 type User struct {
@@ -54,6 +55,45 @@ func (cfg *apiConfig) resetHitsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Hits counter reset to %d", cfg.fileserverHits)
+}
+
+func (cfg *apiConfig) resetUsersHandler(w http.ResponseWriter, r *http.Request) {
+	if cfg.platform != "dev" {
+		respondWithError(w, 403, "Forbidden request")
+	} else {
+		cfg.dbQueries.ResetUsers(r.Context())
+		respondWithJSON(w, 200, "Users DB has been reset")
+	}
+}
+
+func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type emailStruct struct {
+		Email string `json:"email"`
+	}
+
+	newEmail := emailStruct{}
+	if err := json.NewDecoder(r.Body).Decode(&newEmail); err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not decode request body: %s", err))
+	}
+
+	user, err := cfg.dbQueries.CreateUser(r.Context(), newEmail.Email)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not create user: %s", err))
+	}
+
+	User := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	if err := respondWithJSON(w, 201, User); err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
+	}
+
 }
 
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
@@ -117,39 +157,10 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
 }
 
-func (apiCfg apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	type emailStruct struct {
-		Email string `json:"email"`
-	}
-
-	newEmail := emailStruct{}
-	if err := json.NewDecoder(r.Body).Decode(&newEmail); err != nil {
-		respondWithError(w, 500, fmt.Sprintf("could not decode request body: %s", err))
-	}
-
-	user, err := apiCfg.dbQueries.CreateUser(r.Context(), newEmail.Email)
-	if err != nil {
-		respondWithError(w, 500, fmt.Sprintf("could not create user: %s", err))
-	}
-
-	User := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	}
-
-	if err := respondWithJSON(w, 200, User); err != nil {
-		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
-	}
-
-}
-
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -160,18 +171,23 @@ func main() {
 	apiCfg := apiConfig{
 		fileserverHits: 0,
 		dbQueries:      dbQueries,
+		platform:       platform,
 	}
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
-	mux.Handle("/admin/", http.HandlerFunc(apiCfg.adminHandler))
-	mux.Handle("/assets/", assetsHandler)
+	mux.Handle("GET /app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
+
+	mux.Handle("GET /admin/", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.adminHandler)))
+	mux.Handle("POST /admin/resetUsers", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
+	mux.Handle("POST /admin/resetHits", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetHitsHandler)))
+
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
-	mux.Handle("POST /admin/reset", http.HandlerFunc(apiCfg.resetHitsHandler))
 	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirp))
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsers))
+
+	mux.Handle("GET /assets/", assetsHandler)
 
 	server := &http.Server{
 		Addr:    "localhost:8080",
