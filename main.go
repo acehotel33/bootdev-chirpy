@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -26,6 +27,11 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+}
+
+type ChirpStruct struct {
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
@@ -66,6 +72,15 @@ func (cfg *apiConfig) resetUsersHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	if cfg.platform != "dev" {
+		respondWithError(w, 403, "Forbidden request")
+	} else {
+		cfg.dbQueries.ResetChirps(r.Context())
+		respondWithJSON(w, 200, "Chirps DB has been reset")
+	}
+}
+
 func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -96,35 +111,60 @@ func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
+	type chirpJSON struct {
+		Body   string `json:"body"`
+		UserID string `json:"user_id"`
+	}
+
+	req, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not read request body: %s", err))
+	} else {
+		defer r.Body.Close()
+
+		chirpData := chirpJSON{}
+		if err := json.Unmarshal(req, &chirpData); err != nil {
+			respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
+		} else {
+			body, err := validateChirp(chirpData.Body)
+			if err != nil {
+				respondWithError(w, 401, err.Error())
+			} else {
+				userID, err := uuid.Parse(chirpData.UserID)
+				if err != nil {
+					respondWithError(w, 401, fmt.Sprintf("invalid user_id: %v", err))
+				} else {
+					chirpParams := database.CreateChirpParams{
+						Body:   body,
+						UserID: uuid.NullUUID{UUID: userID, Valid: true},
+					}
+
+					chirpEntry, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
+					if err != nil {
+						respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
+					} else {
+						respondWithJSON(w, 201, chirpEntry)
+					}
+				}
+			}
+		}
+	}
+}
+
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
-func validateChirp(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	type chirpStruct struct {
-		Body string `json:"body"`
-	}
-
-	chirp := chirpStruct{}
-	if err := json.NewDecoder(r.Body).Decode(&chirp); err != nil {
-		respondWithError(w, 500, "Could not decode request body")
-	}
-
-	chCount := len(chirp.Body)
+func validateChirp(body string) (string, error) {
+	chCount := len(body)
 	if chCount > 140 {
-		respondWithError(w, 400, fmt.Sprintf("Chirp is too long (exceeds limit by %d characters)", chCount-140))
+		return "", fmt.Errorf("chirp is too long (exceeds limit by %d characters)", chCount-140)
 	} else {
-		cleanWords := profanityReplacer(chirp.Body)
-
-		if err := respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanWords}); err != nil {
-			respondWithError(w, 500, "Could not clean the chirp")
-		}
+		return body, nil
 	}
-
 }
 
 func profanityReplacer(text string) string {
@@ -179,13 +219,15 @@ func main() {
 	mux.Handle("GET /app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
 
 	mux.Handle("GET /admin/", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.adminHandler)))
+	// mux.Handle("POST /admin/reset", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
 	mux.Handle("POST /admin/resetUsers", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
+	mux.Handle("POST /admin/resetChirps", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetChirpsHandler)))
 	mux.Handle("POST /admin/resetHits", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetHitsHandler)))
 
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
-	mux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirp))
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsers))
+	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
 
 	mux.Handle("GET /assets/", assetsHandler)
 

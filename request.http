@@ -15,7 +15,16 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "ilya@example.com"
+  "email": "tatia@example.com"
+}
+
+### Post Request
+POST http://localhost:8080/api/chirps
+Content-Type: application/json
+
+{
+    "body": "Hello, world!",
+    "user_id": "6c5ed115-2b4e-477a-bf17-30619a21238f"  
 }
 
 ### Post Request
