@@ -135,16 +135,21 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 				if err != nil {
 					respondWithError(w, 401, fmt.Sprintf("invalid user_id: %v", err))
 				} else {
-					chirpParams := database.CreateChirpParams{
+					chirpData = chirpJSON{
 						Body:   body,
+						UserID: userID.String(),
+					}
+
+					chirpParams := database.CreateChirpParams{
+						Body:   chirpData.Body,
 						UserID: uuid.NullUUID{UUID: userID, Valid: true},
 					}
 
-					chirpEntry, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
+					_, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
 					if err != nil {
 						respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
 					} else {
-						respondWithJSON(w, 201, chirpEntry)
+						respondWithJSON(w, 201, chirpData)
 					}
 				}
 			}
@@ -219,7 +224,7 @@ func main() {
 	mux.Handle("GET /app/", http.StripPrefix("/app", apiCfg.middlewareMetricsInc(appHandler)))
 
 	mux.Handle("GET /admin/", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.adminHandler)))
-	// mux.Handle("POST /admin/reset", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
+	mux.Handle("POST /admin/reset", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
 	mux.Handle("POST /admin/resetUsers", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetUsersHandler)))
 	mux.Handle("POST /admin/resetChirps", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetChirpsHandler)))
 	mux.Handle("POST /admin/resetHits", http.StripPrefix("/admin", http.HandlerFunc(apiCfg.resetHitsHandler)))
