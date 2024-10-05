@@ -162,9 +162,21 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
-	_, err := cfg.dbQueries.GetAllChirps(r.Context())
+	chirpsSpliceDB, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, 500, err.Error())
+	} else {
+		chirpsSpliceAPI := []Chirp{}
+		for _, chirp := range chirpsSpliceDB {
+			chirpsSpliceAPI = append(chirpsSpliceAPI, Chirp{
+				ID:        chirp.ID,
+				CreatedAt: chirp.CreatedAt,
+				UpdatedAt: chirp.UpdatedAt,
+				Body:      chirp.Body,
+				UserID:    chirp.UserID.UUID,
+			})
+		}
+		respondWithJSON(w, 200, chirpsSpliceAPI)
 	}
 }
 

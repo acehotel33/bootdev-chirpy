@@ -23,9 +23,12 @@ POST http://localhost:8080/api/chirps
 Content-Type: application/json
 
 {
-    "body": "Hello, world!",
-    "user_id": "17fe2a4e-f643-45f5-9108-b3a480a2dd4d"  
+    "body": "uh try threeeee",
+    "user_id": "0ce34e94-5a15-4dfd-bcab-2839332b7a0e"  
 }
+
+### Get Request
+GET http://localhost:8080/api/chirps
 
 ### Post Request
 POST http://localhost:8080/admin/resetUsers
