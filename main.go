@@ -84,7 +84,7 @@ func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	type emailStruct struct {
@@ -161,7 +161,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	chirpsSpliceDB, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, 500, err.Error())
@@ -178,6 +178,28 @@ func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
 		}
 		respondWithJSON(w, 200, chirpsSpliceAPI)
 	}
+}
+
+func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpID := r.PathValue("chirpID")
+	chirpUUID, err := uuid.Parse(chirpID)
+	if err != nil {
+		respondWithError(w, 500, err.Error())
+	}
+	chirpDB, err := cfg.dbQueries.GetChirp(r.Context(), chirpUUID)
+	if err != nil {
+		respondWithError(w, 500, err.Error())
+	} else {
+		chirpAPI := Chirp{
+			ID:        chirpDB.ID,
+			CreatedAt: chirpDB.CreatedAt,
+			UpdatedAt: chirpDB.UpdatedAt,
+			Body:      chirpDB.Body,
+			UserID:    chirpDB.UserID.UUID,
+		}
+		respondWithJSON(w, 200, chirpAPI)
+	}
+
 }
 
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
@@ -254,9 +276,10 @@ func main() {
 
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
-	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsers))
+	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsersHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
-	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirps))
+	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirpsHandler))
+	mux.Handle("GET /api/chirps/{chirpID}", http.HandlerFunc(apiCfg.getChirpHandler))
 
 	mux.Handle("GET /assets/", assetsHandler)
 

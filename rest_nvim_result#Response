@@ -1,0 +1,7 @@
+### Get Request
+GET http://localhost:8080/api/chirps
+HTTP/1.1 200 OK
+
+# @_RES (formatted)
+[{"id":"832ccf8e-9db8-4fe8-b467-be191b02ce40","created_at":"2024-10-05T10:45:08.577859Z","updated_at":"2024-10-05T10:45:08.577859Z","body":"If you're committed enough, you can make any story work.","user_id":"82e41a33-5043-477f-aadf-1a77b964a609"},{"id":"a9eaa943-fa49-4fab-9f72-4427a154d084","created_at":"2024-10-05T10:45:08.579825Z","updated_at":"2024-10-05T10:45:08.579825Z","body":"I once told a woman I was Kevin Costner, and it worked because I believed it.","user_id":"82e41a33-5043-477f-aadf-1a77b964a609"},{"id":"3753c263-160a-4856-be01-072c6a3c3abe","created_at":"2024-10-05T11:05:16.698618Z","updated_at":"2024-10-05T11:05:16.698618Z","body":"check check","user_id":"45cf0dd0-8759-49a6-bfb1-f615960583cc"},{"id":"6bc754ed-a45c-4ebe-b5b8-7c5508f010d4","created_at":"2024-10-05T11:07:08.533284Z","updated_at":"2024-10-05T11:07:08.533284Z","body":"howdie","user_id":"45cf0dd0-8759-49a6-bfb1-f615960583cc"}]
+# @_END
