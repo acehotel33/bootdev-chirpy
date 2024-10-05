@@ -24,11 +24,14 @@ Content-Type: application/json
 
 {
     "body": "Hello, world!",
-    "user_id": "6c5ed115-2b4e-477a-bf17-30619a21238f"  
+    "user_id": "17fe2a4e-f643-45f5-9108-b3a480a2dd4d"  
 }
 
 ### Post Request
 POST http://localhost:8080/admin/resetUsers
+
+### Post Request
+POST http://localhost:8080/admin/resetChirps
 
 ### Post Request
 POST http://localhost:8080/admin/resetHits

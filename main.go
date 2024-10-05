@@ -29,9 +29,12 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
-type ChirpStruct struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
@@ -112,10 +115,6 @@ func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
-	type chirpJSON struct {
-		Body   string `json:"body"`
-		UserID string `json:"user_id"`
-	}
 
 	req, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -123,37 +122,49 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	} else {
 		defer r.Body.Close()
 
-		chirpData := chirpJSON{}
-		if err := json.Unmarshal(req, &chirpData); err != nil {
+		type ChirpRequest struct {
+			Body   string    `json:"body"`
+			UserID uuid.UUID `json:"user_id"`
+		}
+
+		chirpRequest := ChirpRequest{}
+		if err := json.Unmarshal(req, &chirpRequest); err != nil {
 			respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
 		} else {
-			body, err := validateChirp(chirpData.Body)
+
+			body, err := validateChirp(chirpRequest.Body)
 			if err != nil {
 				respondWithError(w, 401, err.Error())
 			} else {
-				userID, err := uuid.Parse(chirpData.UserID)
+
+				chirpParams := database.CreateChirpParams{
+					Body:   body,
+					UserID: uuid.NullUUID{UUID: chirpRequest.UserID, Valid: true},
+				}
+
+				chirpDB, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
 				if err != nil {
-					respondWithError(w, 401, fmt.Sprintf("invalid user_id: %v", err))
+					respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
 				} else {
-					chirpData = chirpJSON{
-						Body:   body,
-						UserID: userID.String(),
-					}
 
-					chirpParams := database.CreateChirpParams{
-						Body:   chirpData.Body,
-						UserID: uuid.NullUUID{UUID: userID, Valid: true},
+					chirpAPI := Chirp{
+						ID:        chirpDB.ID,
+						CreatedAt: chirpDB.CreatedAt,
+						UpdatedAt: chirpDB.UpdatedAt,
+						Body:      chirpDB.Body,
+						UserID:    chirpDB.UserID.UUID,
 					}
-
-					_, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
-					if err != nil {
-						respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
-					} else {
-						respondWithJSON(w, 201, chirpData)
-					}
+					respondWithJSON(w, 201, chirpAPI)
 				}
 			}
 		}
+	}
+}
+
+func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
+	_, err := cfg.dbQueries.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, 500, err.Error())
 	}
 }
 
@@ -233,6 +244,7 @@ func main() {
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsers))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirps))
 
 	mux.Handle("GET /assets/", assetsHandler)
 
