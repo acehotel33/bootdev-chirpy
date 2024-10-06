@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/acehotel33/bootdev-chirpy/internal/auth"
 	"github.com/acehotel33/bootdev-chirpy/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -248,6 +249,13 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 }
 
 func main() {
+	auth.HashPassword("helloooo")
+	if err := auth.CheckPasswordHash("helloooo", "$a$10$Ln.e7S2T.a.dTkjtvvip2OwhoNFWeoZHJLkAQQu9kSBP8gKkIQmh6"); err != nil {
+		fmt.Println("woah" + err.Error())
+	} else {
+		fmt.Println("hellyeah")
+	}
+
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
