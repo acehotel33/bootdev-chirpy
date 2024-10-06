@@ -15,7 +15,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "tatia@example.com"
+  "email": "vakkkk@example.com",
+  "password": "heyheyhey"
 }
 
 ### Post Request
@@ -24,7 +25,7 @@ Content-Type: application/json
 
 {
     "body": "howdie",
-    "user_id": "45cf0dd0-8759-49a6-bfb1-f615960583cc"  
+    "user_id": "b5e0594c-e1eb-46e9-9b04-c9310df4dacd"  
 }
 
 

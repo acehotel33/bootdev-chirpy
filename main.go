@@ -70,36 +70,50 @@ func (cfg *apiConfig) resetHitsHandler(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) resetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	if cfg.platform != "dev" {
 		respondWithError(w, 403, "Forbidden request")
-	} else {
-		cfg.dbQueries.ResetUsers(r.Context())
-		respondWithJSON(w, 200, "Users DB has been reset")
+		return
 	}
+	cfg.dbQueries.ResetUsers(r.Context())
+	respondWithJSON(w, 200, "Users DB has been reset")
+
 }
 
 func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	if cfg.platform != "dev" {
 		respondWithError(w, 403, "Forbidden request")
-	} else {
-		cfg.dbQueries.ResetChirps(r.Context())
-		respondWithJSON(w, 200, "Chirps DB has been reset")
+		return
 	}
+	cfg.dbQueries.ResetChirps(r.Context())
+	respondWithJSON(w, 200, "Chirps DB has been reset")
+
 }
 
 func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	type emailStruct struct {
-		Email string `json:"email"`
+	type reqStruct struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
-	newEmail := emailStruct{}
-	if err := json.NewDecoder(r.Body).Decode(&newEmail); err != nil {
+	newReq := reqStruct{}
+	if err := json.NewDecoder(r.Body).Decode(&newReq); err != nil {
 		respondWithError(w, 500, fmt.Sprintf("could not decode request body: %s", err))
+		return
+	}
+	hashedPassword, err := auth.HashPassword(newReq.Password)
+	if err != nil {
+		respondWithError(w, 501, fmt.Sprintf("could not hash password: %v", err.Error()))
+		return
 	}
 
-	user, err := cfg.dbQueries.CreateUser(r.Context(), newEmail.Email)
+	userParams := database.CreateUserParams{
+		Email:          newReq.Email,
+		HashedPassword: hashedPassword,
+	}
+	user, err := cfg.dbQueries.CreateUser(r.Context(), userParams)
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("could not create user: %s", err))
+		return
 	}
 
 	User := User{
@@ -111,74 +125,79 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 
 	if err := respondWithJSON(w, 201, User); err != nil {
 		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
+		return
 	}
 
 }
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
-
+	// Read the request body
 	req, err := io.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("could not read request body: %s", err))
-	} else {
-		defer r.Body.Close()
-
-		type ChirpRequest struct {
-			Body   string    `json:"body"`
-			UserID uuid.UUID `json:"user_id"`
-		}
-
-		chirpRequest := ChirpRequest{}
-		if err := json.Unmarshal(req, &chirpRequest); err != nil {
-			respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
-		} else {
-
-			body, err := validateChirp(chirpRequest.Body)
-			if err != nil {
-				respondWithError(w, 401, err.Error())
-			} else {
-
-				chirpParams := database.CreateChirpParams{
-					Body:   body,
-					UserID: uuid.NullUUID{UUID: chirpRequest.UserID, Valid: true},
-				}
-
-				chirpDB, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
-				if err != nil {
-					respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
-				} else {
-
-					chirpAPI := Chirp{
-						ID:        chirpDB.ID,
-						CreatedAt: chirpDB.CreatedAt,
-						UpdatedAt: chirpDB.UpdatedAt,
-						Body:      chirpDB.Body,
-						UserID:    chirpDB.UserID.UUID,
-					}
-					respondWithJSON(w, 201, chirpAPI)
-				}
-			}
-		}
+		return
 	}
-}
+	defer r.Body.Close()
 
+	// Define and parse the chirp request
+	type ChirpRequest struct {
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+
+	chirpRequest := ChirpRequest{}
+	if err := json.Unmarshal(req, &chirpRequest); err != nil {
+		respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
+		return
+	}
+
+	// Validate the chirp body
+	body, err := validateChirp(chirpRequest.Body)
+	if err != nil {
+		respondWithError(w, 401, err.Error())
+		return
+	}
+
+	// Prepare chirp parameters and create chirp in the database
+	chirpParams := database.CreateChirpParams{
+		Body:   body,
+		UserID: uuid.NullUUID{UUID: chirpRequest.UserID, Valid: true},
+	}
+
+	chirpDB, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("could not create chirp: %s", err))
+		return
+	}
+
+	// Respond with the created chirp
+	chirpAPI := Chirp{
+		ID:        chirpDB.ID,
+		CreatedAt: chirpDB.CreatedAt,
+		UpdatedAt: chirpDB.UpdatedAt,
+		Body:      chirpDB.Body,
+		UserID:    chirpDB.UserID.UUID,
+	}
+	respondWithJSON(w, 201, chirpAPI)
+}
 func (cfg *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	chirpsSpliceDB, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, 500, err.Error())
-	} else {
-		chirpsSpliceAPI := []Chirp{}
-		for _, chirp := range chirpsSpliceDB {
-			chirpsSpliceAPI = append(chirpsSpliceAPI, Chirp{
-				ID:        chirp.ID,
-				CreatedAt: chirp.CreatedAt,
-				UpdatedAt: chirp.UpdatedAt,
-				Body:      chirp.Body,
-				UserID:    chirp.UserID.UUID,
-			})
-		}
-		respondWithJSON(w, 200, chirpsSpliceAPI)
+		return
 	}
+	chirpsSpliceAPI := []Chirp{}
+	for _, chirp := range chirpsSpliceDB {
+		chirpsSpliceAPI = append(chirpsSpliceAPI, Chirp{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID.UUID,
+		})
+	}
+	respondWithJSON(w, 200, chirpsSpliceAPI)
+
 }
 
 func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,20 +205,21 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 	chirpUUID, err := uuid.Parse(chirpID)
 	if err != nil {
 		respondWithError(w, 500, err.Error())
+		return
 	}
 	chirpDB, err := cfg.dbQueries.GetChirp(r.Context(), chirpUUID)
 	if err != nil {
 		respondWithError(w, 500, err.Error())
-	} else {
-		chirpAPI := Chirp{
-			ID:        chirpDB.ID,
-			CreatedAt: chirpDB.CreatedAt,
-			UpdatedAt: chirpDB.UpdatedAt,
-			Body:      chirpDB.Body,
-			UserID:    chirpDB.UserID.UUID,
-		}
-		respondWithJSON(w, 200, chirpAPI)
+		return
 	}
+	chirpAPI := Chirp{
+		ID:        chirpDB.ID,
+		CreatedAt: chirpDB.CreatedAt,
+		UpdatedAt: chirpDB.UpdatedAt,
+		Body:      chirpDB.Body,
+		UserID:    chirpDB.UserID.UUID,
+	}
+	respondWithJSON(w, 200, chirpAPI)
 
 }
 
@@ -249,12 +269,6 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 }
 
 func main() {
-	auth.HashPassword("helloooo")
-	if err := auth.CheckPasswordHash("helloooo", "$a$10$Ln.e7S2T.a.dTkjtvvip2OwhoNFWeoZHJLkAQQu9kSBP8gKkIQmh6"); err != nil {
-		fmt.Println("woah" + err.Error())
-	} else {
-		fmt.Println("hellyeah")
-	}
 
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
