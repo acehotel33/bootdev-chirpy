@@ -130,6 +130,45 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 
 }
 
+func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
+	type reqStruct struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	req, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 501, fmt.Sprintf("could not read request body: %s", err.Error()))
+		return
+	}
+	defer r.Body.Close()
+
+	userLoginParams := reqStruct{}
+	if err := json.Unmarshal(req, &userLoginParams); err != nil {
+		respondWithError(w, 501, fmt.Sprintf("could not unmarshal request body: %s", err.Error()))
+		return
+	}
+
+	retrievedUser, err := cfg.dbQueries.GetUserByEmail(r.Context(), userLoginParams.Email)
+	if err != nil {
+		respondWithError(w, 401, "Incorrect email or password")
+		return
+	}
+
+	if err := auth.CheckPasswordHash(userLoginParams.Password, retrievedUser.HashedPassword); err != nil {
+		respondWithError(w, 401, "Incorrect email or password")
+		return
+	}
+
+	retrievedUserClean := User{
+		ID:        retrievedUser.ID,
+		CreatedAt: retrievedUser.CreatedAt,
+		UpdatedAt: retrievedUser.UpdatedAt,
+		Email:     retrievedUser.Email,
+	}
+
+	respondWithJSON(w, 200, retrievedUserClean)
+}
+
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the request body
 	req, err := io.ReadAll(r.Body)
@@ -268,12 +307,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
 }
 
-func main() {
-
-	godotenv.Load()
-	dbURL := os.Getenv("DB_URL")
-	platform := os.Getenv("PLATFORM")
-
+func initiateServer(dbURL, platform string) {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Printf("Could not initiate db: %s", err)
@@ -298,8 +332,11 @@ func main() {
 
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
+
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsersHandler))
+	mux.Handle("POST /api/login", http.HandlerFunc(apiCfg.userLoginHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+
 	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirpsHandler))
 	mux.Handle("GET /api/chirps/{chirpID}", http.HandlerFunc(apiCfg.getChirpHandler))
 
@@ -313,5 +350,13 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		fmt.Printf("error listening and serving - %v", err)
 	}
+}
+
+func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
+
+	initiateServer(dbURL, platform)
 
 }
