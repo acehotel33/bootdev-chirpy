@@ -2,6 +2,9 @@ package auth
 
 import (
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestHashPassword(t *testing.T) {
@@ -53,5 +56,26 @@ func TestCheckPasswordHash(t *testing.T) {
 	err = CheckPasswordHash(wrongPassword, hashedPassword)
 	if err == nil {
 		t.Error("Expected error for incorrect password, got none")
+	}
+}
+
+func TestMakeValidateJWT(t *testing.T) {
+	userID, err := uuid.NewRandom()
+	if err != nil {
+		t.Fatalf("Failed to create random UUID: %v", err)
+	}
+
+	expiry := time.Hour
+
+	tokenString, err := MakeJWT(userID, "bootdev", expiry)
+	if err != nil {
+		t.Errorf("Expected no error for MakeJWT: %v", err)
+	}
+	uID, err := ValidateJWT(tokenString, "bootdev")
+	if err != nil {
+		t.Errorf("Expected no error for ValidateJWT: %v", err)
+	}
+	if userID != uID {
+		t.Errorf("Expected userID to match: %v", err)
 	}
 }
