@@ -218,18 +218,12 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 
 	// Define and parse the chirp request
 	type ChirpRequest struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	chirpRequest := ChirpRequest{}
 	if err := json.Unmarshal(req, &chirpRequest); err != nil {
 		respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
-		return
-	}
-
-	if chirpRequest.UserID != tokenUserID {
-		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 
@@ -243,7 +237,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	// Prepare chirp parameters and create chirp in the database
 	chirpParams := database.CreateChirpParams{
 		Body:   body,
-		UserID: uuid.NullUUID{UUID: chirpRequest.UserID, Valid: true},
+		UserID: uuid.NullUUID{UUID: tokenUserID, Valid: true},
 	}
 
 	chirpDB, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
@@ -262,6 +256,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	}
 	respondWithJSON(w, 201, chirpAPI)
 }
+
 func (cfg *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	chirpsSpliceDB, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
