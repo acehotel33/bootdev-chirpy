@@ -50,8 +50,10 @@ type Chirp struct {
 
 var ProfaneWords = []string{"kerfuffle", "sharbert", "fornax"}
 
-var appHandler http.Handler = http.FileServer(http.Dir("."))
-var assetsHandler http.Handler = http.FileServer(http.Dir("."))
+var (
+	appHandler    http.Handler = http.FileServer(http.Dir("."))
+	assetsHandler http.Handler = http.FileServer(http.Dir("."))
+)
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +86,6 @@ func (cfg *apiConfig) resetUsersHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	cfg.dbQueries.ResetUsers(r.Context())
 	respondWithJSON(w, 200, "Users DB has been reset")
-
 }
 
 func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +95,6 @@ func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request)
 	}
 	cfg.dbQueries.ResetChirps(r.Context())
 	respondWithJSON(w, 200, "Chirps DB has been reset")
-
 }
 
 func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -138,14 +138,13 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
 		return
 	}
-
 }
 
 func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	type reqStruct struct {
+		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 		Email            string `json:"email"`
 		Password         string `json:"password"`
-		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 	}
 
 	req, err := io.ReadAll(r.Body)
@@ -274,7 +273,6 @@ func (cfg *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request
 		})
 	}
 	respondWithJSON(w, 200, chirpsSpliceAPI)
-
 }
 
 func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +295,6 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 		UserID:    chirpDB.UserID.UUID,
 	}
 	respondWithJSON(w, 200, chirpAPI)
-
 }
 
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
@@ -397,5 +394,4 @@ func main() {
 	platform := os.Getenv("PLATFORM")
 	secret := os.Getenv("SECRET")
 	initiateServer(dbURL, platform, secret)
-
 }

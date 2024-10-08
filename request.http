@@ -21,8 +21,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "hello@example.com",
-  "password": "password",
+  "email": "newuser@example.com",
+  "password": "somepassword"
 }
 
 ### Post Request
@@ -30,23 +30,23 @@ POST http://localhost:8080/api/login
 Content-Type: application/json
 
 {
-  "email": "vvvakho@example.com",
-  "password": "bitch",
+  "email": "newuser@example.com",
+  "password": "somepassword",
+  "expires_in_seconds": 5000
 }
 
 ### Post Request
 POST http://localhost:8080/api/chirps
 Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHkiLCJzdWIiOiJkYTM4ZTYyNy03YjE4LTRiNzktOWUzMS1lMzNlYjI3ZWVmNzMiLCJleHAiOjE3MjgzNzEyMTgsImlhdCI6MTcyODM2NzYxOH0.nprZdEWw6VmXWG-D6QHx7ngEEY9cdMqXLFY4g-vpR08
 
 {
-    "body": "howdie",
-    "user_id": "b5e0594c-e1eb-46e9-9b04-c9310df4dacd"  
+    "body": "chirp chirp"
 }
 
 ### Get Request
 GET http://localhost:8080/api/chirps/3753c263-160a-4856-be01-072c6a3c3abe
 
-[{"id":"d08468a1-1376-4b5b-8e5d-6903ecdcd46c","created_at":"2024-10-06T09:54:47.816516Z","updated_at":"2024-10-06T09:54:47.816516Z","body":"howdie","user_id":"b5e0594c-e1eb-46e9-9b04-c9310df4dacd"},{"id":"c35bce49-2370-4a3a-a527-c6188a8afb9f","created_at":"2024-10-06T09:55:50.282211Z","updated_at":"2024-10-06T09:55:50.282211Z","body":"howdie","user_id":"b5e0594c-e1eb-46e9-9b04-c9310df4dacd"},{"id":"9eaf972a-aa97-49ac-a66a-95e6b04f192b","created_at":"2024-10-06T09:55:53.621789Z","updated_at":"2024-10-06T09:55:53.621789Z","body":"howdie","user_id":"b5e0594c-e1eb-46e9-9b04-c9310df4dacd"},{"id":"c311b929-6bcc-47a7-9d9b-9fe013fdb6e0","created_at":"2024-10-06T09:55:54.62197Z","updated_at":"2024-10-06T09:55:54.62197Z","body":"howdie","user_id":"b5e0594c-e1eb-46e9-9b04-c9310df4dacd"},{"id":"0e8a0007-414d-4d1f-97e8-b9e260de7a25","created_at":"2024-10-06T10:43:16.573069Z","updated_at":"2024-10-06T10:43:16.573069Z","body":"howdie","user_id":"b5e0594c-e1eb-46e9-9b04-c9310df4dacd"}]
 
 ### Post Request
 POST http://localhost:8080/admin/resetUsers
