@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -21,13 +22,22 @@ type apiConfig struct {
 	fileserverHits int
 	dbQueries      *database.Queries
 	platform       string
+	secret         string
 }
 
-type User struct {
+type UserCreate struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+}
+
+type UserLogin struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 type Chirp struct {
@@ -89,6 +99,7 @@ func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	log.Printf("entered createUsersHandler")
 
 	type reqStruct struct {
 		Email    string `json:"email"`
@@ -116,7 +127,7 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	User := User{
+	User := UserCreate{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
@@ -132,9 +143,11 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	type reqStruct struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 	}
+
 	req, err := io.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, 501, fmt.Sprintf("could not read request body: %s", err.Error()))
@@ -142,8 +155,8 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	userLoginParams := reqStruct{}
-	if err := json.Unmarshal(req, &userLoginParams); err != nil {
+	userLoginParams := &reqStruct{}
+	if err := json.Unmarshal(req, userLoginParams); err != nil {
 		respondWithError(w, 501, fmt.Sprintf("could not unmarshal request body: %s", err.Error()))
 		return
 	}
@@ -159,11 +172,25 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	retrievedUserClean := User{
+	if userLoginParams.ExpiresInSeconds == nil || *userLoginParams.ExpiresInSeconds > 3600 {
+		expiresInSeconds := 3600
+		userLoginParams.ExpiresInSeconds = &expiresInSeconds
+	}
+
+	log.Printf("\nexpires in after: %v\n", *userLoginParams.ExpiresInSeconds)
+
+	secretToken, err := auth.MakeJWT(retrievedUser.ID, cfg.secret, time.Second*time.Duration(*userLoginParams.ExpiresInSeconds))
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	retrievedUserClean := UserLogin{
 		ID:        retrievedUser.ID,
 		CreatedAt: retrievedUser.CreatedAt,
 		UpdatedAt: retrievedUser.UpdatedAt,
 		Email:     retrievedUser.Email,
+		Token:     secretToken,
 	}
 
 	respondWithJSON(w, 200, retrievedUserClean)
@@ -307,7 +334,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
 }
 
-func initiateServer(dbURL, platform string) {
+func initiateServer(dbURL, platform, secret string) {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Printf("Could not initiate db: %s", err)
@@ -318,6 +345,7 @@ func initiateServer(dbURL, platform string) {
 		fileserverHits: 0,
 		dbQueries:      dbQueries,
 		platform:       platform,
+		secret:         secret,
 	}
 
 	mux := http.NewServeMux()
@@ -356,7 +384,7 @@ func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
-
-	initiateServer(dbURL, platform)
+	secret := os.Getenv("SECRET")
+	initiateServer(dbURL, platform, secret)
 
 }

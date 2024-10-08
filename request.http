@@ -21,8 +21,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "new_user@example.com",
-  "password": "bitch"
+  "email": "hello@example.com",
+  "password": "password",
 }
 
 ### Post Request
@@ -30,8 +30,8 @@ POST http://localhost:8080/api/login
 Content-Type: application/json
 
 {
-  "email": "vakkkk@example.com",
-  "password": "heyheyhey"
+  "email": "vvvakho@example.com",
+  "password": "bitch",
 }
 
 ### Post Request
