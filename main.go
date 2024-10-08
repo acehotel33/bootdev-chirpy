@@ -197,7 +197,18 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
-	// Read the request body
+	bearer, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	tokenUserID, err := auth.ValidateJWT(bearer, cfg.secret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	req, err := io.ReadAll(r.Body)
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("could not read request body: %s", err))
@@ -214,6 +225,11 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	chirpRequest := ChirpRequest{}
 	if err := json.Unmarshal(req, &chirpRequest); err != nil {
 		respondWithError(w, 500, fmt.Sprintf("failed to parse JSON: %s", err))
+		return
+	}
+
+	if chirpRequest.UserID != tokenUserID {
+		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 
