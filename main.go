@@ -33,11 +33,12 @@ type UserCreate struct {
 }
 
 type UserLogin struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 type Chirp struct {
@@ -184,12 +185,24 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 401, "Could not generate refresh token")
+	}
+	refreshTokenParameters := database.AssignRefreshTokenToUserParams{
+		Token:  refreshToken,
+		UserID: uuid.NullUUID{UUID: retrievedUser.ID, Valid: true},
+	}
+
+	cfg.dbQueries.AssignRefreshTokenToUser(r.Context(), refreshTokenParameters)
+
 	retrievedUserClean := UserLogin{
-		ID:        retrievedUser.ID,
-		CreatedAt: retrievedUser.CreatedAt,
-		UpdatedAt: retrievedUser.UpdatedAt,
-		Email:     retrievedUser.Email,
-		Token:     secretToken,
+		ID:           retrievedUser.ID,
+		CreatedAt:    retrievedUser.CreatedAt,
+		UpdatedAt:    retrievedUser.UpdatedAt,
+		Email:        retrievedUser.Email,
+		Token:        secretToken,
+		RefreshToken: refreshToken,
 	}
 
 	respondWithJSON(w, 200, retrievedUserClean)
