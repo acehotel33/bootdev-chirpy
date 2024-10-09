@@ -3,7 +3,6 @@ package auth
 import (
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -66,9 +65,7 @@ func TestMakeValidateJWT(t *testing.T) {
 		t.Fatalf("Failed to create random UUID: %v", err)
 	}
 
-	expiry := time.Hour
-
-	tokenString, err := MakeJWT(userID, "bootdev", expiry)
+	tokenString, err := MakeJWT(userID, "bootdev")
 	if err != nil {
 		t.Errorf("Expected no error for MakeJWT: %v", err)
 	}

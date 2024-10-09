@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -100,7 +99,6 @@ func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	log.Printf("entered createUsersHandler")
 
 	type reqStruct struct {
 		Email    string `json:"email"`
@@ -143,9 +141,8 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 
 func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	type reqStruct struct {
-		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
-		Email            string `json:"email"`
-		Password         string `json:"password"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	req, err := io.ReadAll(r.Body)
@@ -172,14 +169,7 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userLoginParams.ExpiresInSeconds == nil || *userLoginParams.ExpiresInSeconds > 3600 {
-		expiresInSeconds := 3600
-		userLoginParams.ExpiresInSeconds = &expiresInSeconds
-	}
-
-	log.Printf("\nexpires in after: %v\n", *userLoginParams.ExpiresInSeconds)
-
-	secretToken, err := auth.MakeJWT(retrievedUser.ID, cfg.secret, time.Second*time.Duration(*userLoginParams.ExpiresInSeconds))
+	secretToken, err := auth.MakeJWT(retrievedUser.ID, cfg.secret)
 	if err != nil {
 		respondWithError(w, 401, "Unauthorized")
 		return
@@ -188,13 +178,19 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
 		respondWithError(w, 401, "Could not generate refresh token")
+		return
 	}
+
 	refreshTokenParameters := database.AssignRefreshTokenToUserParams{
 		Token:  refreshToken,
 		UserID: uuid.NullUUID{UUID: retrievedUser.ID, Valid: true},
 	}
 
-	cfg.dbQueries.AssignRefreshTokenToUser(r.Context(), refreshTokenParameters)
+	_, err = cfg.dbQueries.AssignRefreshTokenToUser(r.Context(), refreshTokenParameters)
+	if err != nil {
+		respondWithError(w, 401, "Could not assign refresh token")
+		return
+	}
 
 	retrievedUserClean := UserLogin{
 		ID:           retrievedUser.ID,
@@ -208,14 +204,69 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, retrievedUserClean)
 }
 
-func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
-	bearer, err := auth.GetBearerToken(r.Header)
+func (cfg *apiConfig) refreshHandler(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 
-	tokenUserID, err := auth.ValidateJWT(bearer, cfg.secret)
+	refreshTokenDB, err := cfg.dbQueries.GetRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	if refreshTokenDB.RevokedAt.Valid {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	userID, err := cfg.dbQueries.GetUserIDFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	accessToken, err := auth.MakeJWT(userID, cfg.secret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	type respStruct struct {
+		Token string `json:"token"`
+	}
+	resp := respStruct{
+		Token: accessToken,
+	}
+
+	respondWithJSON(w, 200, resp)
+}
+
+func (cfg *apiConfig) revokeHandler(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	_, err = cfg.dbQueries.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	respondWithJSON(w, 204, "")
+}
+
+func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	tokenUserID, err := auth.ValidateJWT(token, cfg.secret)
 	if err != nil {
 		respondWithError(w, 401, "Unauthorized")
 		return
@@ -385,6 +436,9 @@ func initiateServer(dbURL, platform, secret string) {
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsersHandler))
 	mux.Handle("POST /api/login", http.HandlerFunc(apiCfg.userLoginHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+
+	mux.Handle("POST /api/refresh", http.HandlerFunc(apiCfg.refreshHandler))
+	mux.Handle("POST /api/revoke", http.HandlerFunc(apiCfg.revokeHandler))
 
 	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirpsHandler))
 	mux.Handle("GET /api/chirps/{chirpID}", http.HandlerFunc(apiCfg.getChirpHandler))

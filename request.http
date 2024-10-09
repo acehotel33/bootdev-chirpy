@@ -21,8 +21,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "email": "newuser@example.com",
-  "password": "somepassword"
+  "email": "bubu@example.com",
+  "password": "bubuismydog"
 }
 
 ### Post Request
@@ -30,19 +30,28 @@ POST http://localhost:8080/api/login
 Content-Type: application/json
 
 {
-  "email": "newuser@example.com",
-  "password": "somepassword",
-  "expires_in_seconds": 5000
+  "email": "bubu@example.com",
+  "password": "bubuismydog"
 }
 
 ### Post Request
 POST http://localhost:8080/api/chirps
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHkiLCJzdWIiOiJkYTM4ZTYyNy03YjE4LTRiNzktOWUzMS1lMzNlYjI3ZWVmNzMiLCJleHAiOjE3MjgzNzEyMTgsImlhdCI6MTcyODM2NzYxOH0.nprZdEWw6VmXWG-D6QHx7ngEEY9cdMqXLFY4g-vpR08
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHkiLCJzdWIiOiJkZTUyN2ZjMS00YjZhLTRhMGUtYTc2Ny03Mjk3MWI3MjcwODciLCJleHAiOjE3MzM2NDc5OTIsImlhdCI6MTcyODQ2Mzk5Mn0.3JZCwg7TEQhXqcYl5JbJ4XGSjy84fGLlXSV5PA9G8lw
 
 {
-    "body": "chirp chirp"
+    "body": "new access token"
 }
+
+### Post Request
+POST http://localhost:8080/api/refresh
+Content-Type: application/json
+Authorization: Bearer f72bf003ec57b784d3d31292b172e0186db7a57a133a36a3e239551bba8b701c
+
+### Post Request
+POST http://localhost:8080/api/revoke
+Content-Type: application/json
+Authorization: Bearer f72bf003ec57b784d3d31292b172e0186db7a57a133a36a3e239551bba8b701c
 
 ### Get Request
 GET http://localhost:8080/api/chirps/3753c263-160a-4856-be01-072c6a3c3abe
