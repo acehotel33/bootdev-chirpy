@@ -25,10 +25,11 @@ type apiConfig struct {
 }
 
 type UserCreate struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 type UserLogin struct {
@@ -38,6 +39,7 @@ type UserLogin struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 }
 
 type Chirp struct {
@@ -127,10 +129,11 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	User := UserCreate{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	if err := respondWithJSON(w, 201, User); err != nil {
@@ -187,10 +190,11 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	resp := UserCreate{
-		ID:        userDB.ID,
-		CreatedAt: userDB.CreatedAt,
-		UpdatedAt: userDB.UpdatedAt,
-		Email:     userDB.Email,
+		ID:          userDB.ID,
+		CreatedAt:   userDB.CreatedAt,
+		UpdatedAt:   userDB.UpdatedAt,
+		Email:       userDB.Email,
+		IsChirpyRed: userDB.IsChirpyRed,
 	}
 
 	respondWithJSON(w, 200, resp)
@@ -256,6 +260,7 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
 		Email:        retrievedUser.Email,
 		Token:        secretToken,
 		RefreshToken: refreshToken,
+		IsChirpyRed:  retrievedUser.IsChirpyRed,
 	}
 
 	respondWithJSON(w, 200, retrievedUserClean)
@@ -462,6 +467,40 @@ func healthzFunc(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (cfg *apiConfig) polkaHandler(w http.ResponseWriter, r *http.Request) {
+	type reqStruct struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID uuid.UUID `json:"user_id"`
+		} `json:"data"`
+	}
+	reqBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 401, "Invalid body")
+		return
+	}
+	defer r.Body.Close()
+
+	request := &reqStruct{}
+	if err := json.Unmarshal(reqBody, request); err != nil {
+		respondWithError(w, 401, "Invalid body")
+		return
+	}
+	event := request.Event
+	if event != "user.upgraded" {
+		respondWithJSON(w, 204, "")
+		return
+	}
+	userID := request.Data.UserID
+
+	_, err = cfg.dbQueries.UpgradeToChirpyRed(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, 404, "User not found")
+		return
+	}
+	respondWithJSON(w, 204, "")
+}
+
 func validateChirp(body string) (string, error) {
 	chCount := len(body)
 	if chCount > 140 {
@@ -531,6 +570,8 @@ func initiateServer(dbURL, platform, secret string) {
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUserHandler))
 	mux.Handle("POST /api/login", http.HandlerFunc(apiCfg.userLoginHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+
+	mux.Handle("POST /api/polka/webhooks", http.HandlerFunc(apiCfg.polkaHandler))
 
 	mux.Handle("PUT /api/users", http.HandlerFunc(apiCfg.updateUserHandler))
 
