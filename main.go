@@ -22,6 +22,7 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	platform       string
 	secret         string
+	polkaKey       string
 }
 
 type UserCreate struct {
@@ -468,6 +469,12 @@ func healthzFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) polkaHandler(w http.ResponseWriter, r *http.Request) {
+	reqAPIKey, err := getAPIKey(r.Header)
+	if err != nil || reqAPIKey != cfg.polkaKey {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	type reqStruct struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -522,6 +529,21 @@ func profanityReplacer(text string) string {
 	return strings.Join(words, " ")
 }
 
+func getAPIKey(headers http.Header) (string, error) {
+	auth := headers.Get("Authorization")
+	if auth == "" {
+		return "", fmt.Errorf("could not find authorization header")
+	}
+
+	authSplit := strings.Split(auth, " ")
+	if authSplit[0] != "ApiKey" || len(authSplit) != 2 {
+		return "", fmt.Errorf("could not find API Key")
+	}
+
+	APIKey := authSplit[1]
+	return APIKey, nil
+}
+
 func respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) error {
 	respJSON, err := json.Marshal(payload)
 	if err != nil {
@@ -540,7 +562,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, msg string) error {
 	return respondWithJSON(w, statusCode, map[string]string{"error": msg})
 }
 
-func initiateServer(dbURL, platform, secret string) {
+func initiateServer(dbURL, platform, secret, polkaKey string) {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Printf("Could not initiate db: %s", err)
@@ -552,6 +574,7 @@ func initiateServer(dbURL, platform, secret string) {
 		dbQueries:      dbQueries,
 		platform:       platform,
 		secret:         secret,
+		polkaKey:       polkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -599,5 +622,6 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
 	secret := os.Getenv("SECRET")
-	initiateServer(dbURL, platform, secret)
+	polkaKey := os.Getenv("POLKA_KEY")
+	initiateServer(dbURL, platform, secret, polkaKey)
 }
