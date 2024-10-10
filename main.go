@@ -97,7 +97,7 @@ func (cfg *apiConfig) resetChirpsHandler(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, 200, "Chirps DB has been reset")
 }
 
-func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	type reqStruct struct {
@@ -137,6 +137,63 @@ func (cfg *apiConfig) createUsersHandler(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 500, fmt.Sprintf("could not respond with user: %s", err))
 		return
 	}
+}
+
+func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	userID, err := auth.ValidateJWT(accessToken, cfg.secret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	type reqStruct struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	req, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 501, "Could not read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	reqBody := &reqStruct{}
+	if err := json.Unmarshal(req, reqBody); err != nil {
+		respondWithError(w, 501, "Could not read request body")
+		return
+	}
+
+	email := reqBody.Email
+	password := reqBody.Password
+	hashedPassword, err := auth.HashPassword(password)
+	if err != nil {
+		respondWithError(w, 401, "Invalid password")
+	}
+
+	updatePasswordParams := database.UpdateUserPasswordParams{
+		ID:             userID,
+		Email:          email,
+		HashedPassword: hashedPassword,
+	}
+	userDB, err := cfg.dbQueries.UpdateUserPassword(r.Context(), updatePasswordParams)
+	if err != nil {
+		respondWithError(w, 501, "Could not update password")
+	}
+
+	resp := UserCreate{
+		ID:        userDB.ID,
+		CreatedAt: userDB.CreatedAt,
+		UpdatedAt: userDB.UpdatedAt,
+		Email:     userDB.Email,
+	}
+
+	respondWithJSON(w, 200, resp)
 }
 
 func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -433,9 +490,10 @@ func initiateServer(dbURL, platform, secret string) {
 	mux.HandleFunc("GET /api/healthz", healthzFunc)
 	mux.HandleFunc("GET /api/metrics", apiCfg.serverHitsHandler)
 
-	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUsersHandler))
+	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUserHandler))
 	mux.Handle("POST /api/login", http.HandlerFunc(apiCfg.userLoginHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+	mux.Handle("PUT /api/users", http.HandlerFunc(apiCfg.updateUserHandler))
 
 	mux.Handle("POST /api/refresh", http.HandlerFunc(apiCfg.refreshHandler))
 	mux.Handle("POST /api/revoke", http.HandlerFunc(apiCfg.revokeHandler))
