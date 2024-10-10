@@ -405,7 +405,7 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	chirpDB, err := cfg.dbQueries.GetChirp(r.Context(), chirpUUID)
 	if err != nil {
-		respondWithError(w, 500, err.Error())
+		respondWithError(w, 404, "Not found")
 		return
 	}
 	chirpAPI := Chirp{
@@ -416,6 +416,44 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 		UserID:    chirpDB.UserID.UUID,
 	}
 	respondWithJSON(w, 200, chirpAPI)
+}
+
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpID := r.PathValue("chirpID")
+
+	chirpUUID, err := uuid.Parse(chirpID)
+	if err != nil || chirpID == "" {
+		respondWithError(w, 404, "Invalid chirp ID")
+		return
+	}
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	userID, err := auth.ValidateJWT(accessToken, cfg.secret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	chirpDB, err := cfg.dbQueries.GetChirp(r.Context(), chirpUUID)
+	if chirpDB.UserID.UUID != userID || err != nil {
+		respondWithError(w, 403, "Forbidden request")
+	}
+
+	deleteChirpParams := database.DeleteChirpParams{
+		UserID: uuid.NullUUID{UUID: userID, Valid: true},
+		ID:     chirpUUID,
+	}
+
+	_, err = cfg.dbQueries.DeleteChirp(r.Context(), deleteChirpParams)
+	if err != nil {
+		respondWithError(w, 404, "Not found")
+		return
+	}
+
+	respondWithJSON(w, 204, "")
 }
 
 func healthzFunc(w http.ResponseWriter, r *http.Request) {
@@ -493,6 +531,7 @@ func initiateServer(dbURL, platform, secret string) {
 	mux.Handle("POST /api/users", http.HandlerFunc(apiCfg.createUserHandler))
 	mux.Handle("POST /api/login", http.HandlerFunc(apiCfg.userLoginHandler))
 	mux.Handle("POST /api/chirps", http.HandlerFunc(apiCfg.createChirpHandler))
+
 	mux.Handle("PUT /api/users", http.HandlerFunc(apiCfg.updateUserHandler))
 
 	mux.Handle("POST /api/refresh", http.HandlerFunc(apiCfg.refreshHandler))
@@ -501,6 +540,7 @@ func initiateServer(dbURL, platform, secret string) {
 	mux.Handle("GET /api/chirps", http.HandlerFunc(apiCfg.getAllChirpsHandler))
 	mux.Handle("GET /api/chirps/{chirpID}", http.HandlerFunc(apiCfg.getChirpHandler))
 
+	mux.Handle("DELETE /api/chirps/{chirpID}", http.HandlerFunc(apiCfg.deleteChirpHandler))
 	mux.Handle("GET /assets/", assetsHandler)
 
 	server := &http.Server{
